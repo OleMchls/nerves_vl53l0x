@@ -1,6 +1,6 @@
 defmodule VL53L0X do
   @moduledoc """
-  A library to interface with the VL6180X time-of-flight laser sensor.
+  A library to interface with the VL53L0X time-of-flight laser sensor.
   """
   use Bitwise
 
