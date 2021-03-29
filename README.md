@@ -2,7 +2,7 @@
 
 A library to interface with the VL53L0X laser time-of-flight sensor.
 
-[![](https://cdn-shop.adafruit.com/970x728/3317-15.jpg)](https://www.adafruit.com/product/3317))
+[![](https://cdn-shop.adafruit.com/970x728/3317-15.jpg)](https://www.adafruit.com/product/3317)
 
 This is the 'big sister' of the VL6180X ToF sensor, and can handle about 50mm to 1200mm of range distance. If you need a smaller/closer range, check out the VL6180X which can measure 5mm to 200mm and also contains a light sensor.
 
@@ -47,4 +47,4 @@ distance_in_mm = VL53L0X.range(ref)
 
 ## Acknowledgements
 
-This library is basically a port of the [Adafruit python driver](https://github.com/adafruit/Adafruit_CircuitPython_VL53L0X) :heart: which in turn is based on the amazing work of @pololu on the arduino library [vl53l0x-arduino](https://github.com/pololu/vl53l0x-arduino).
+This library is basically a port of the [Adafruit python driver](https://github.com/adafruit/Adafruit_CircuitPython_VL53L0X) :heart: which in turn is based on the amazing work of [@pololu](https://github.com/pololu) on the arduino library [vl53l0x-arduino](https://github.com/pololu/vl53l0x-arduino).
