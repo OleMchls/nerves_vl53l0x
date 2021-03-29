@@ -105,21 +105,17 @@ defmodule VL53L0X do
     set_signal_rate_limit(sensor, 0.25)
     writeu8(bus, device, @system_sequence_config, 0xFF)
     # NEXT: Adapt get_spad_info
-    {spad_count, spad_is_aperture} =
-      get_spad_info(sensor)
-      |> IO.inspect(label: "SPAD INFO")
+    {spad_count, spad_is_aperture} = get_spad_info(sensor)
 
     {:ok, ref_spad} = read_multi(bus, device, @global_config_spad_enables_ref_0, 6)
 
     ref_spad_map =
       ref_spad
-      |> IO.inspect(label: "ref_spad")
       |> :binary.bin_to_list()
       # Insert index as value
       |> Enum.with_index()
       # Swap value and key
       |> Enum.into(%{}, fn {v, k} -> {k, v} end)
-      |> IO.inspect(label: "ref_spad_map")
 
     for {register, val} <- [
           {0xFF, 0x01},
@@ -145,24 +141,19 @@ defmodule VL53L0X do
           # (reference_spad_count) bits have already been enabled, so zero this bit
           {inner_spads_enabled,
            Map.update!(inner_ref_spad_map, row, fn spads -> spads &&& ~~~(1 <<< rem(i, 8)) end)}
-          |> IO.inspect(label: "#{i}: spads action first")
         else
           if inner_ref_spad_map[row] >>> rem(i, 8) &&& 0x1 do
             {inner_spads_enabled + 1, inner_ref_spad_map}
-            |> IO.inspect(label: "#{i}: spads action second")
           else
             {inner_spads_enabled, inner_ref_spad_map}
-            |> IO.inspect(label: "#{i}: spads action none")
           end
         end
       end)
-      |> IO.inspect(label: "spads action")
 
     spad_regs =
       ref_spad_map
       |> Map.values()
       |> :binary.list_to_bin()
-      |> IO.inspect(label: "spads reg")
 
     write_multi(bus, device, @global_config_spad_enables_ref_0, spad_regs)
 
@@ -198,7 +189,6 @@ defmodule VL53L0X do
     writeu8(bus, device, @system_interrupt_clear, 0x01)
 
     measurement_timing_budget_us = get_measurement_timing_budget(sensor)
-    |> IO.inspect(label: "measurement_timing_budget")
     writeu8(bus, device, @system_sequence_config, 0xE8)
     set_measurement_timing_budget(sensor, measurement_timing_budget_us)
 
@@ -271,9 +261,7 @@ defmodule VL53L0X do
 
   def get_measurement_timing_budget(%__MODULE__{} = ref) do
     {tcc, dss, msrc, pre_range, final_range} = get_sequence_step_enables(ref)
-    |> IO.inspect(label: "get_measurement_timing_budget:get_sequence_step_enables")
     {msrc_dss_tcc_us, pre_range_us, final_range_us, _, _} = get_sequence_step_timeouts(ref, pre_range)
-    |> IO.inspect(label: "get_measurement_timing_budget:get_sequence_step_timeouts")
 
     budget_us = 1910 + 960  # Start overhead + end overhead.
     budget_us = if tcc, do: budget_us + msrc_dss_tcc_us + 590, else: budget_us
@@ -291,9 +279,7 @@ defmodule VL53L0X do
   def set_measurement_timing_budget(%__MODULE__{}, budget_us) when budget_us < 20000, do: {:error, :budget_too_small}
   def set_measurement_timing_budget(%__MODULE__{bus: bus, device: device} = ref, budget_us) when budget_us >= 20000  do
     {tcc, dss, msrc, pre_range, final_range} = get_sequence_step_enables(ref)
-    |> IO.inspect(label: "set_measurement_timing_budget:get_sequence_step_enables")
     {msrc_dss_tcc_us, pre_range_us, _, final_range_vcsel_period_pclks, pre_range_mclks} = get_sequence_step_timeouts(ref, pre_range)
-    |> IO.inspect(label: "set_measurement_timing_budget:get_sequence_step_timeouts")
 
     used_budget_us = 1320 + 960  # Start (diff from get) + end overhead
     used_budget_us = if tcc, do: used_budget_us + msrc_dss_tcc_us + 590, else: used_budget_us
@@ -304,7 +290,6 @@ defmodule VL53L0X do
      end
      used_budget_us = if pre_range, do: used_budget_us + pre_range_us + 660, else: used_budget_us
      if final_range do
-       IO.inspect(used_budget_us, label: "final used_budget_us")
        used_budget_us = used_budget_us + 550
        if used_budget_us > budget_us, do: throw({:error, :budget_too_big})
        final_range_timeout_us = budget_us - used_budget_us
