@@ -127,8 +127,6 @@ defmodule VL53L0X do
         ],
         do: writeu8(ref, address, register, val)
 
-    # Next adapt SPAD MAP vl6180x_device_model_identification
-    # https://github.com/adafruit/Adafruit_CircuitPython_VL53L0X/blob/e8dbe63d6b6daaa8f84cb007c261f67c03748700/adafruit_vl53l0x.py#L191-L202
     # 12 is the first aperture spad
     first_spad_to_enable = if spad_is_aperture, do: 12, else: 0
     spads_enabled = 0
