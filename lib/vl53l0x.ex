@@ -73,40 +73,43 @@ defmodule VL53L0X do
   @vcsel_period_pre_range 0
   @vcsel_period_final_range 1
 
-  def open(bus_name \\ "i2c-1", address \\ @vl53l0x_default_i2c_addr) do
+  def open(bus_name, address \\ @vl53l0x_default_i2c_addr) do
     {:ok, ref} = I2C.open(bus_name)
 
     # Check check_device_model_identification
     {:ok, <<0xEE>>} = readu8(ref, address, @identification_model_id)
 
-    sensor = %__MODULE__{bus: ref, device: address}
+    {:ok, %__MODULE__{bus: ref, device: address}}
+  end
 
+  @spec init(t()) :: {:ok, t()} | {:error, term()}
+  def init(%__MODULE__{bus: bus, device: device} = sensor) do
     # Initialize access to the sensor.  This is based on the logic from:
     #   https://github.com/pololu/vl53l0x-arduino/blob/master/VL53L0X.cpp
     # Set I2C standard mode.
     for {register, val} <- [{0x88, 0x00}, {0x80, 0x01}, {0xFF, 0x01}, {0x00, 0x00}],
-        do: writeu8(ref, address, register, val)
+        do: writeu8(bus, device, register, val)
 
-    {:ok, <<stop_variable>>} = readu8(ref, address, 0x91)
+    {:ok, <<stop_variable>>} = readu8(bus, device, 0x91)
     sensor = %{sensor | stop_variable: stop_variable}
 
     for {register, val} <- [{0x00, 0x01}, {0xFF, 0x00}, {0x80, 0x00}],
-        do: writeu8(ref, address, register, val)
+        do: writeu8(bus, device, register, val)
 
     # disable SIGNAL_RATE_MSRC (bit 1) and SIGNAL_RATE_PRE_RANGE (bit 4)
     # limit checks
-    {:ok, <<config_control>>} = readu8(ref, address, @msrc_config_control)
-    writeu8(ref, address, @msrc_config_control, config_control ||| 0b0001_0010)
+    {:ok, <<config_control>>} = readu8(bus, device, @msrc_config_control)
+    writeu8(bus, device, @msrc_config_control, config_control ||| 0b0001_0010)
 
     # set final range signal rate limit to 0.25 MCPS (million counts per second)
     set_signal_rate_limit(sensor, 0.25)
-    writeu8(ref, address, @system_sequence_config, 0xFF)
+    writeu8(bus, device, @system_sequence_config, 0xFF)
     # NEXT: Adapt get_spad_info
     {spad_count, spad_is_aperture} =
       get_spad_info(sensor)
       |> IO.inspect(label: "SPAD INFO")
 
-    {:ok, ref_spad} = read_multi(ref, address, @global_config_spad_enables_ref_0, 6)
+    {:ok, ref_spad} = read_multi(bus, device, @global_config_spad_enables_ref_0, 6)
 
     ref_spad_map =
       ref_spad
@@ -125,7 +128,7 @@ defmodule VL53L0X do
           {0xFF, 0x00},
           {@global_config_ref_en_start_select, 0xB4}
         ],
-        do: writeu8(ref, address, register, val)
+        do: writeu8(bus, device, register, val)
 
     # 12 is the first aperture spad
     first_spad_to_enable = if spad_is_aperture, do: 12, else: 0
@@ -161,7 +164,7 @@ defmodule VL53L0X do
       |> :binary.list_to_bin()
       |> IO.inspect(label: "spads reg")
 
-    write_multi(ref, address, @global_config_spad_enables_ref_0, spad_regs)
+    write_multi(bus, device, @global_config_spad_enables_ref_0, spad_regs)
 
     # -- VL53L0X_load_tuning_settings()
     for {register, val} <- [
@@ -186,31 +189,28 @@ defmodule VL53L0X do
           {0xFF, 0x00}, {0x80, 0x01}, {0x01, 0xF8}, {0xFF, 0x01},
           {0x8E, 0x01}, {0x00, 0x01}, {0xFF, 0x00}, {0x80, 0x00}
         ],
-        do: writeu8(ref, address, register, val)
+        do: writeu8(bus, device, register, val)
 
     # Set interrupt config to new sample ready"
-    writeu8(ref, address, @system_interrupt_config_gpio, 0x04)
-    {:ok, << gpio_hv_mux >>} = readu8(ref, address, @gpio_hv_mux_active_high)
-    writeu8(ref, address, @gpio_hv_mux_active_high, gpio_hv_mux &&& ~~~0x10) # active low
-    writeu8(ref, address, @system_interrupt_clear, 0x01)
+    writeu8(bus, device, @system_interrupt_config_gpio, 0x04)
+    {:ok, << gpio_hv_mux >>} = readu8(bus, device, @gpio_hv_mux_active_high)
+    writeu8(bus, device, @gpio_hv_mux_active_high, gpio_hv_mux &&& ~~~0x10) # active low
+    writeu8(bus, device, @system_interrupt_clear, 0x01)
 
     measurement_timing_budget_us = get_measurement_timing_budget(sensor)
     |> IO.inspect(label: "measurement_timing_budget")
-    writeu8(ref, address, @system_sequence_config, 0xE8)
+    writeu8(bus, device, @system_sequence_config, 0xE8)
     set_measurement_timing_budget(sensor, measurement_timing_budget_us)
 
-    writeu8(ref, address, @system_sequence_config, 0x01)
+    writeu8(bus, device, @system_sequence_config, 0x01)
     perform_single_ref_calibration(sensor, 0x40)
-    writeu8(ref, address, @system_sequence_config, 0x02)
+    writeu8(bus, device, @system_sequence_config, 0x02)
     perform_single_ref_calibration(sensor, 0x00)
     # "restore the previous Sequence Config"
-    writeu8(ref, address, @system_sequence_config, 0xE8)
+    writeu8(bus, device, @system_sequence_config, 0xE8)
 
     {:ok, sensor}
   end
-
-  @spec init(t()) :: :ok | {:error, term()}
-  def init(%__MODULE__{}), do: :ok
 
   def set_signal_rate_limit(%__MODULE__{}, limit_mcps) when limit_mcps < 0,
     do: {:error, :limit_mcps_too_low}
